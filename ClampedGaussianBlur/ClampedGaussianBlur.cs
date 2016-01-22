@@ -6,6 +6,7 @@ using PaintDotNet;
 using PaintDotNet.Effects;
 using PaintDotNet.IndirectUI;
 using PaintDotNet.PropertySystem;
+using DistanceTransformation;
 
 namespace ClampedGaussianBlurEffect
 {
@@ -112,23 +113,63 @@ namespace ClampedGaussianBlurEffect
             Amount1 = newToken.GetProperty<Int32Property>(PropertyNames.Amount1).Value;
 
 
-            Rectangle selection = EnvironmentParameters.GetSelection(srcArgs.Surface.Bounds).GetBoundsInt();
-
             if (selectionSurface == null)
             {
-                selectionSurface = new Surface(selection.Size);
-                selectionSurface.CopySurface(srcArgs.Surface, selection);
+                selectionSurface = new Surface(srcArgs.Surface.Size);
+                PdnRegion selectionRegion = EnvironmentParameters.GetSelection(srcArgs.Bounds);
+                selectionSurface.CopySurface(srcArgs.Surface, selectionRegion);
+
+                // Increase absolute Transparency within selection to 1 to ensure clamping happens at selection edge
+                ColorBgra alphaTest;
+                foreach (Rectangle r in selectionRegion.GetRegionScansInt())
+                {
+                    for (int y = r.Top; y < r.Bottom; y++)
+                    {
+                        if (IsCancelRequested) return;
+                        for (int x = r.Left; x < r.Right; x++)
+                        {
+                            alphaTest = selectionSurface[x, y];
+                            if (alphaTest.A == 0)
+                                alphaTest.A = 1;
+                            selectionSurface[x, y] = alphaTest;
+                        }
+                    }
+                }
+            }
+
+            Rectangle selection = EnvironmentParameters.GetSelection(srcArgs.Surface.Bounds).GetBoundsInt();
+            int left = Math.Max(0, selection.Left - 200);
+            int right = Math.Min(srcArgs.Surface.Width, selection.Right + 200);
+            int top = Math.Max(0, selection.Top - 200);
+            int bottom = Math.Min(srcArgs.Surface.Height, selection.Bottom + 200);
+
+            if (nearestPixels == null)
+            {
+                nearestPixels = new NearestPixelTransform(left, top, right - left, bottom - top);
+                nearestPixels.Include((x, y) => selectionSurface[x, y].A >= 1);
+                nearestPixels.Transform();
             }
 
             if (clampedSurface == null)
                 clampedSurface = new Surface(srcArgs.Surface.Size);
 
-            for (int y = Math.Max(0, selection.Top - 200); y < Math.Min(clampedSurface.Height, selection.Bottom + 200); y++)
+            ColorBgra cp;
+            for (int y = top; y < bottom; y++)
             {
                 if (IsCancelRequested) return;
-                for (int x = Math.Max(0, selection.Left - 200); x < Math.Min(clampedSurface.Width, selection.Right + 200); x++)
+                for (int x = left; x < right; x++)
                 {
-                    clampedSurface[x, y] = selectionSurface.GetBilinearSampleClamped(x - selection.Left, y - selection.Top);
+                    cp = selectionSurface[x, y];
+                    if (cp.A > 1)
+                    {
+                        clampedSurface[x, y] = cp;
+                    }
+                    else
+                    {
+                        Point p = nearestPixels[x, y];
+                        cp = selectionSurface[p];
+                        clampedSurface[x, y] = cp;
+                    }
                 }
             }
 
@@ -151,6 +192,7 @@ namespace ClampedGaussianBlurEffect
 
         Surface selectionSurface;
         Surface clampedSurface;
+        NearestPixelTransform nearestPixels;
 
         void Render(Surface dst, Surface src, Rectangle rect)
         {
