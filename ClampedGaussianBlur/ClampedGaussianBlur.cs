@@ -173,6 +173,11 @@ namespace ClampedGaussianBlurEffect
                 }
             }
 
+            // Setup for calling the Gaussian Blur effect
+            PropertyCollection blurProps = blurEffect.CreatePropertyCollection();
+            PropertyBasedEffectConfigToken BlurParameters = new PropertyBasedEffectConfigToken(blurProps);
+            BlurParameters.SetPropertyValue(GaussianBlurEffect.PropertyNames.Radius, Amount1);
+            blurEffect.SetRenderInfo(BlurParameters, dstArgs, new RenderArgs(clampedSurface));
 
             base.OnSetRenderInfo(newToken, dstArgs, srcArgs);
         }
@@ -180,10 +185,8 @@ namespace ClampedGaussianBlurEffect
         protected override void OnRender(Rectangle[] renderRects, int startIndex, int length)
         {
             if (length == 0) return;
-            for (int i = startIndex; i < startIndex + length; ++i)
-            {
-                Render(DstArgs.Surface, SrcArgs.Surface, renderRects[i]);
-            }
+
+            blurEffect.Render(renderRects, startIndex, length);
         }
 
         #region CodeLab
@@ -193,17 +196,6 @@ namespace ClampedGaussianBlurEffect
         Surface selectionSurface;
         Surface clampedSurface;
         NearestPixelTransform nearestPixels;
-
-        void Render(Surface dst, Surface src, Rectangle rect)
-        {
-            // Setup for calling the Gaussian Blur effect
-            GaussianBlurEffect blurEffect = new GaussianBlurEffect();
-            PropertyCollection blurProps = blurEffect.CreatePropertyCollection();
-            PropertyBasedEffectConfigToken BlurParameters = new PropertyBasedEffectConfigToken(blurProps);
-            BlurParameters.SetPropertyValue(GaussianBlurEffect.PropertyNames.Radius, Amount1);
-            blurEffect.SetRenderInfo(BlurParameters, new RenderArgs(dst), new RenderArgs(clampedSurface));
-            // Call the Gaussian Blur function
-            blurEffect.Render(new Rectangle[1] { rect }, 0, 1);
-        }
+        readonly GaussianBlurEffect blurEffect = new GaussianBlurEffect();
     }
 }
