@@ -112,29 +112,14 @@ namespace ClampedGaussianBlurEffect
         {
             Amount1 = newToken.GetProperty<Int32Property>(PropertyNames.Amount1).Value;
 
+            ColorBgra colorMarker = ColorBgra.FromBgra(46, 106, 84, 0);
 
             if (selectionSurface == null)
             {
                 selectionSurface = new Surface(srcArgs.Surface.Size);
+                selectionSurface.Clear(colorMarker);
                 PdnRegion selectionRegion = EnvironmentParameters.GetSelection(srcArgs.Bounds);
                 selectionSurface.CopySurface(srcArgs.Surface, selectionRegion);
-
-                // Increase absolute Transparency within selection to 1 to ensure clamping happens at selection edge
-                ColorBgra alphaTest;
-                foreach (Rectangle r in selectionRegion.GetRegionScansInt())
-                {
-                    for (int y = r.Top; y < r.Bottom; y++)
-                    {
-                        if (IsCancelRequested) return;
-                        for (int x = r.Left; x < r.Right; x++)
-                        {
-                            alphaTest = selectionSurface[x, y];
-                            if (alphaTest.A == 0)
-                                alphaTest.A = 1;
-                            selectionSurface[x, y] = alphaTest;
-                        }
-                    }
-                }
             }
 
             Rectangle selection = EnvironmentParameters.GetSelection(srcArgs.Surface.Bounds).GetBoundsInt();
@@ -146,7 +131,7 @@ namespace ClampedGaussianBlurEffect
             if (nearestPixels == null)
             {
                 nearestPixels = new NearestPixelTransform(left, top, right - left, bottom - top);
-                nearestPixels.Include((x, y) => selectionSurface[x, y].A >= 1);
+                nearestPixels.Include((x, y) => selectionSurface[x, y] != colorMarker);
                 nearestPixels.Transform();
             }
 
@@ -161,7 +146,7 @@ namespace ClampedGaussianBlurEffect
                 {
                     cp = selectionSurface[x, y];
 
-                    if (cp.A <= 1)
+                    if (cp == colorMarker)
                         cp = selectionSurface[nearestPixels[x, y]];
 
                     clampedSurface[x, y] = cp;
