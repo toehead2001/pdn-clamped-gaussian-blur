@@ -160,16 +160,11 @@ namespace ClampedGaussianBlurEffect
                 for (int x = left; x < right; x++)
                 {
                     cp = selectionSurface[x, y];
-                    if (cp.A > 1)
-                    {
-                        clampedSurface[x, y] = cp;
-                    }
-                    else
-                    {
-                        Point p = nearestPixels[x, y];
-                        cp = selectionSurface[p];
-                        clampedSurface[x, y] = cp;
-                    }
+
+                    if (cp.A <= 1)
+                        cp = selectionSurface[nearestPixels[x, y]];
+
+                    clampedSurface[x, y] = cp;
                 }
             }
 
