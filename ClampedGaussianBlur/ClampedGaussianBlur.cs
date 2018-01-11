@@ -30,11 +30,10 @@ namespace ClampedGaussianBlurEffect
         {
         }
 
-        public enum PropertyNames
+        private enum PropertyNames
         {
             Amount1
         }
-
 
         protected override PropertyCollection OnCreatePropertyCollection()
         {
@@ -56,7 +55,7 @@ namespace ClampedGaussianBlurEffect
 
         protected override void OnSetRenderInfo(PropertyBasedEffectConfigToken newToken, RenderArgs dstArgs, RenderArgs srcArgs)
         {
-            Amount1 = newToken.GetProperty<Int32Property>(PropertyNames.Amount1).Value;
+            int Amount1 = newToken.GetProperty<Int32Property>(PropertyNames.Amount1).Value;
 
             ColorBgra colorMarker = ColorBgra.FromBgra(46, 106, 84, 0);
 
@@ -69,26 +68,30 @@ namespace ClampedGaussianBlurEffect
             }
 
             Rectangle selection = EnvironmentParameters.GetSelection(srcArgs.Surface.Bounds).GetBoundsInt();
-            int left = Math.Max(0, selection.Left - 200);
-            int right = Math.Min(srcArgs.Surface.Width, selection.Right + 200);
-            int top = Math.Max(0, selection.Top - 200);
-            int bottom = Math.Min(srcArgs.Surface.Height, selection.Bottom + 200);
+            Rectangle clampingBounds = Rectangle.FromLTRB(
+                Math.Max(0, selection.Left - 200),
+                Math.Max(0, selection.Top - 200),
+                Math.Min(srcArgs.Surface.Width, selection.Right + 200),
+                Math.Min(srcArgs.Surface.Height, selection.Bottom + 200)
+            );
 
             if (nearestPixels == null)
             {
-                nearestPixels = new NearestPixelTransform(left, top, right - left, bottom - top);
+                nearestPixels = new NearestPixelTransform(clampingBounds.Left, clampingBounds.Top, clampingBounds.Width, clampingBounds.Height);
                 nearestPixels.Include((x, y) => selectionSurface[x, y] != colorMarker);
                 nearestPixels.Transform();
             }
 
             if (clampedSurface == null)
+            {
                 clampedSurface = new Surface(srcArgs.Surface.Size);
+            }
 
             ColorBgra cp;
-            for (int y = top; y < bottom; y++)
+            for (int y = clampingBounds.Top; y < clampingBounds.Bottom; y++)
             {
                 if (IsCancelRequested) return;
-                for (int x = left; x < right; x++)
+                for (int x = clampingBounds.Left; x < clampingBounds.Right; x++)
                 {
                     cp = selectionSurface[x, y];
 
@@ -114,10 +117,6 @@ namespace ClampedGaussianBlurEffect
 
             blurEffect.Render(renderRects, startIndex, length);
         }
-
-        #region CodeLab
-        int Amount1 = 2; // [1,200] Radius
-        #endregion
 
         Surface selectionSurface;
         Surface clampedSurface;
