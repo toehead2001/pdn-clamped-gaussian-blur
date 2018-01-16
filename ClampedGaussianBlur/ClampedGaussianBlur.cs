@@ -122,5 +122,14 @@ namespace ClampedGaussianBlurEffect
         Surface clampedSurface;
         NearestPixelTransform nearestPixels;
         readonly GaussianBlurEffect blurEffect = new GaussianBlurEffect();
+
+        protected override void OnDispose(bool disposing)
+        {
+            selectionSurface?.Dispose();
+            clampedSurface?.Dispose();
+            blurEffect?.Dispose();
+
+            base.OnDispose(disposing);
+        }
     }
 }
