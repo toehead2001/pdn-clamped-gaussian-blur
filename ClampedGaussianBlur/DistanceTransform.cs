@@ -37,233 +37,7 @@ namespace DistanceTransformation
     // equidistance from the two points. All the pixels on the row to the left are nearer to
     // (Xs, Ys) and all the pixels to the right are nearer to (Xs', Ys'). The spans for each
     // candidate must lie on the respective side of the equidistance point. 
-    class DistanceTransform : Table2D<int>
-    {
-        public DistanceTransform() : base()
-        {
-        }
 
-        public DistanceTransform(int width, int height) : base(width, height)
-        {
-        }
-
-        public DistanceTransform(int left, int top, int width, int height) :
-            base(left, top, width, height)
-        {
-        }
-
-        public const int MaxValue = 32767;
-        const int MaxValueSquared = MaxValue * MaxValue;
-
-        public void Transform()
-        {
-            TransformColumns();
-            TransformRows();
-        }
-
-        public void Transform(IsInSetCallback isInSet)
-        {
-            Include(isInSet);
-            Transform();
-        }
-
-        public void TransformColumns()
-        {
-            TransformColumns(Left, Right);
-        }
-
-        public void TransformColumns(IsInSetCallback isInSet)
-        {
-            Include(isInSet);
-            TransformColumns();
-        }
-
-        public DistanceTransform(int left, int top, int width, int height, IsInSetCallback isInSet) :
-            base(left, top, width, height)
-        {
-            Transform(isInSet);
-        }
-
-        public DistanceTransform(int width, int height, IsInSetCallback isInSet) :
-            base(width, height)
-        {
-            Transform(isInSet);
-        }
-
-        public void TransformColumns(int left, int right)
-        {
-            // The array elements are initially 0 if set and nonzero if not set.
-            // Replace each element with the distance to the nearest element in the same column.
-            for (int x = left; x < right; x++)
-            {
-                int nearestY = -MaxValue;
-                for (int y = Top; y < Bottom; y++)
-                {
-                    if (this[x, y] == 0)
-                    {
-                        nearestY = y;
-
-                        // Check previous pixels to see if this Y is nearer.
-                        int by = y;
-                        while ((--by >= Top) && (this[x, by] > nearestY - by))
-                            this[x, by] = nearestY - by;
-                    }
-                    else
-                    {
-                        this[x, y] = y - nearestY;
-                    }
-                }
-            }
-        }
-
-        struct SpanDistSq
-        {
-            public int NearestPixelX;
-            public int SpanX;
-            public int Distance2;
-
-            public SpanDistSq(int nearestPixelX, int spanX, int distance2)
-            {
-                NearestPixelX = nearestPixelX;
-                SpanX = spanX;
-                Distance2 = distance2;
-            }
-        }
-
-        public void TransformRows()
-        {
-            TransformRows(Top, Bottom);
-        }
-
-        public void TransformRows(int top, int bottom)
-        {
-            SpanDistSq[] span = new SpanDistSq[Width + 1];
-
-            // Each entry in the image contains the distance to the nearest set pixel in the same
-            // column. These are the candidate pixels.
-            for (int y = top; y < bottom; y++)
-            {
-                // Taking each candidate pixel one at a time from left to right, determine its span. Each new
-                // candidate pixel will be nearest to the pixels in the row from some point onward. Since the
-                // spans are in the same X order as the candidate pixels, the previous spans are checked from
-                // right to left. If the new candidate is closer than a previous candidate for that pixel's
-                // entire span, the previous candidate's span is eliminated. Once a candidate is found that's
-                // closer at the beginning of its span than the new candidate, the point at which the new
-                // candidate becomes closer is appended to the span list as the end of the previous span and
-                // the beginning of the new span.
-                int spanIndex = 0;
-                span[0] = new SpanDistSq(Left, Left, Sq(Left) + Sq(this[Left, y]));
-                for (int x = Left + 1; x < Right; x++)
-                {
-                    // Calculate the distance squared from (0, Y) for each of the candidate pixels.
-                    // If (X, Y) is a pixel in the Y row, and (Xs, Ys) is a set pixel:
-                    // (X - Xs)^2 + (Y - Ys)^2
-                    // X^2 - 2 * Xs * X + Xs^2 + (Y - Ys)^2
-                    // [Xs^2 + (Y - Ys)^2] + X^2 - 2 * Xs * X
-                    //
-                    // If (Xs, Ys) and (Xs', Ys'), Xs < Xs', are two candidates for nearest pixels,
-                    // (X, Y) is nearer to (Xs', Ys') then to (Xs, Ys) if,
-                    // (X - Xs)^2 + (Y - Ys)^2 > (X - Xs')^2 + (Y - Ys')^2
-                    // [Xs^2 + (Y - Ys)^2] + X^2 - 2 * Xs * X > [Xs'^2 + (Y - Ys')^2] + X^2 - 2 * Xs' * X
-                    // [Xs'^2 + (Y - Ys')^2] - [Xs^2 + (Y - Ys)^2] < X * [2 * (Xs' - Xs)]
-                    // X > {[Xs'^2 + (Y - Ys')^2] - [Xs^2 + (Y - Ys)^2]} / [2 * (Xs' - Xs)]
-                    int dist2 = Sq(x) + Sq(this[x, y]);
-
-                    // If the distance to beyond the maximum image distance, don't bother checking further,
-                    // since it can't produce a valid span. (This test isn't necessary to the algorithm.)
-                    if (dist2 >= MaxValueSquared)
-                        continue;
-
-                    // Loop until the previous span can't be eliminated or there are no previous spans.
-                    while (true)
-                    {
-                        // Compare the distance of the new candidate at the beginning of the previous span
-                        // to the distance of the span's associated candidate.
-                        SpanDistSq prevSpan = span[spanIndex];
-                        int prevPixelX = prevSpan.NearestPixelX;
-                        int dist2Diff = dist2 - prevSpan.Distance2;
-                        int twiceXDiff = 2 * (x - prevPixelX);
-                        if (dist2Diff > twiceXDiff * prevSpan.SpanX)
-                        {
-                            // The span for the new candidate starts after the previous span.
-                            // Add a new span to the list.
-                            int spanX = (dist2Diff + twiceXDiff - 1) / twiceXDiff; // Ceiling integer division.
-                            if (spanX < Right)
-                                span[++spanIndex] = new SpanDistSq(x, spanX, dist2);
-                            break;
-                        }
-                        else if (--spanIndex < 0)
-                        {
-                            // No more previous spans, so start over.
-                            spanIndex = 0;
-                            span[0] = new SpanDistSq(x, Left, dist2);
-                            break;
-                        }
-                    }
-                }
-
-                // The spans have been determined. Move through the list of spans, filling in the squared distances
-                // for each pixel. The spans contain the X address of the nearest pixel and the distance squared of
-                // its associated candidate from (0, Y).
-                // (X - Xs)^2 + (Y - Ys)^2 =
-                // X^2 - 2 * Xs * X + Xs^2 + (Y - Ys)^2 =
-                // [Xs^2 + (Y - Ys)^2] + X^2 - 2 * Xs * X =
-                // [Xs^2 + (Y - Ys)^2] + X * (X - 2 * Xs)
-                span[spanIndex + 1].SpanX = Right; // Avoid extra test for end-of-list.
-                int endX = Left;
-                for (int i = 0; i <= spanIndex; i++)
-                {
-                    int startX = endX;
-                    endX = span[i + 1].SpanX;
-                    int twicePixelX = 2 * span[i].NearestPixelX;
-                    int pixelXDist2 = span[i].Distance2;
-                    for (int x = startX; x < endX; x++)
-                        this[x, y] = pixelXDist2 + x * (x - twicePixelX);
-                }
-            }
-        }
-
-        static int Sq(int x)
-        {
-            return x * x;
-        }
-
-        public delegate bool IsInSetCallback(int x, int y);
-
-        public void Include(IsInSetCallback isInSet)
-        {
-            Include(Left, Top, Width, Height, isInSet);
-        }
-
-        public void Include(int x, int y) { this[x, y] = 0; }
-        public void Exclude(int x, int y) { this[x, y] = MaxValue; }
-        public void Include(int x, int y, bool inSet) { this[x, y] = inSet ? 0 : MaxValue; }
-        public bool IsInSet(int x, int y) { return this[x, y] == 0; }
-
-        public int DistanceSquared(int x, int y)
-        {
-            return this[x, y];
-        }
-
-        public double Distance(int x, int y)
-        {
-            return System.Math.Sqrt((double)DistanceSquared(x, y));
-        }
-
-        public void ExcludeAll()
-        {
-            // Set to "ouside of set" value.
-            Clear(MaxValue);
-        }
-
-        public void Include(int left, int top, int width, int height, IsInSetCallback isInSet)
-        {
-            int right = left + width, bottom = top + height;
-            for (int y = top; y < bottom; y++)
-                for (int x = left; x < right; x++)
-                    this[x, y] = isInSet(x, y) ? 0 : MaxValue;
-        }
-    }
 
     //----------------------------------------------------------------------------------------
     // This class determines the nearest pixel rather than the distance to the nearest pixel.
@@ -282,29 +56,9 @@ namespace DistanceTransformation
         public const int MaxValue = 32767;
         const int MaxValueSquared = MaxValue * MaxValue;
 
-        public NearestPixelTransform() : base()
-        {
-        }
-
-        public NearestPixelTransform(int width, int height) : base(width, height)
-        {
-        }
-
         public NearestPixelTransform(int left, int top, int width, int height) :
             base(left, top, width, height)
         {
-        }
-
-        public NearestPixelTransform(int left, int top, int width, int height, IsInSetCallback isInSet) :
-            base(left, top, width, height)
-        {
-            Transform(isInSet);
-        }
-
-        public NearestPixelTransform(int width, int height, IsInSetCallback isInSet) :
-            base(width, height)
-        {
-            Transform(isInSet);
         }
 
         public bool Transform()
@@ -313,21 +67,9 @@ namespace DistanceTransformation
             return TransformRows();
         }
 
-        public bool Transform(IsInSetCallback isInSet)
-        {
-            Include(isInSet);
-            return Transform();
-        }
-
         public void TransformColumns()
         {
             TransformColumns(Left, Right);
-        }
-
-        public void TransformColumns(IsInSetCallback isInSet)
-        {
-            Include(isInSet);
-            TransformColumns();
         }
 
         public void TransformColumns(int left, int right)
@@ -461,34 +203,6 @@ namespace DistanceTransformation
             Include(Left, Top, Width, Height, isIncluded);
         }
 
-        public void Include(int x, int y) { this[x, y] = new PointInt16(x, y); }
-        public void Exclude(int x, int y) { this[x, y] = PointInt16.MaxValue; }
-        public void Include(int x, int y, bool inSet)
-        {
-            this[x, y] = inSet ? new PointInt16(x, y) : PointInt16.MaxValue;
-        }
-
-        public bool IsInSet(int x, int y, bool inSet)
-        {
-            return this[x, y] == new PointInt16(x, y);
-        }
-
-        public int DistanceSquared(int x, int y)
-        {
-            return this[x, y].DistanceSquared(x, y);
-        }
-
-        public double Distance(int x, int y)
-        {
-            return System.Math.Sqrt((double)DistanceSquared(x, y));
-        }
-
-        public void Exclude()
-        {
-            // Set to "ouside of set" value.
-            Clear(PointInt16.MaxValue);
-        }
-
         public void Include(int left, int top, int width, int height, IsInSetCallback isIncluded)
         {
             int right = left + width, bottom = top + height;
@@ -501,10 +215,6 @@ namespace DistanceTransformation
     public struct PointInt16
     {
         public short x, y;
-        public PointInt16(short x, short y)
-        {
-            this.x = x; this.y = y;
-        }
 
         public PointInt16(int x, int y)
         {
@@ -548,23 +258,6 @@ namespace DistanceTransformation
             return new PointInt16(p.X, p.Y);
         }
 
-        public int DistanceSquared(int x, int y)
-        {
-            return Sq(this.x - x) + Sq(this.y  - y);
-        }
-        public int DistanceSquared(PointInt16 p)
-        {
-            return DistanceSquared(p.X, p.Y);
-        }
-        public int DistanceSquared(System.Drawing.Point p)
-        {
-            return DistanceSquared(p.X, p.Y);
-        }
-        int Sq(int x)
-        {
-            return x * x;
-        }
-
         public static readonly PointInt16 MaxValue = new PointInt16(32767, 32767);
     }
 
@@ -579,23 +272,9 @@ namespace DistanceTransformation
 
         public ElementType[] Array;
 
-        public Table2D()
-        {
-        }
-
-        public Table2D(int width, int height)
-        {
-            Resize(0, 0, width, height);
-        }
-
         public Table2D(int left, int top, int width, int height)
         {
             Resize(left, top, width, height);
-        }
-
-        public void Resize(int width, int height, bool reallocate = false)
-        {
-            Resize(0, 0, width, height, reallocate);
         }
 
         public void Resize(int left, int top, int width, int height, bool reallocate = false)
@@ -621,22 +300,11 @@ namespace DistanceTransformation
             set { Array[x + y * width - offset] = value; }
         }
 
-        public void Clear(ElementType clearValue)
-        {
-            for (int i = 0; i < size; i++)
-                Array[i] = clearValue;
-        }
-
-        public int ToIndex(int x, int y) { return x + y * width; }
-        public int ToArrayIndex(int x, int y) { return x + y * width - offset; }
-
         public int Left { get { return left;  } }
         public int Top { get { return top; } }
         public int Width { get { return width; } }
         public int Height { get { return height; } }
         public int Right { get { return right; } }
         public int Bottom { get { return bottom; } }
-        public int Size { get { return size; } }
-        public int ArraySize { get { return arraySize; } }
     }
 }
