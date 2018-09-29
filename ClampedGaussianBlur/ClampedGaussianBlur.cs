@@ -22,8 +22,8 @@ namespace ClampedGaussianBlurEffect
     [PluginSupportInfo(typeof(PluginSupportInfo), DisplayName = "Gaussian Blur (Clamped)")]
     public class ClampedGaussianBlurEffectPlugin : PropertyBasedEffect
     {
-        const string StaticName = "Gaussian Blur (Clamped)";
-        readonly static Image StaticIcon = new Bitmap(typeof(ClampedGaussianBlurEffectPlugin), "ClampedGaussianBlur.png");
+        private const string StaticName = "Gaussian Blur (Clamped)";
+        private readonly static Image StaticIcon = new Bitmap(typeof(ClampedGaussianBlurEffectPlugin), "ClampedGaussianBlur.png");
 
         public ClampedGaussianBlurEffectPlugin()
             : base(StaticName, StaticIcon, SubmenuNames.Blurs, EffectFlags.Configurable)
@@ -118,10 +118,10 @@ namespace ClampedGaussianBlurEffect
             blurEffect.Render(renderRects, startIndex, length);
         }
 
-        Surface selectionSurface;
-        Surface clampedSurface;
-        NearestPixelTransform nearestPixels;
-        readonly GaussianBlurEffect blurEffect = new GaussianBlurEffect();
+        private Surface selectionSurface;
+        private Surface clampedSurface;
+        private NearestPixelTransform nearestPixels;
+        private readonly GaussianBlurEffect blurEffect = new GaussianBlurEffect();
 
         protected override void OnDispose(bool disposing)
         {
