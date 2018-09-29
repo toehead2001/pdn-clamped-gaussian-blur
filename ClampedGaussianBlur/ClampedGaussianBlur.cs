@@ -32,14 +32,14 @@ namespace ClampedGaussianBlurEffect
 
         private enum PropertyNames
         {
-            Amount1
+            Radius
         }
 
         protected override PropertyCollection OnCreatePropertyCollection()
         {
             List<Property> props = new List<Property>();
 
-            props.Add(new Int32Property(PropertyNames.Amount1, 2, 1, 200));
+            props.Add(new Int32Property(PropertyNames.Radius, 2, 1, 200));
 
             return new PropertyCollection(props);
         }
@@ -48,14 +48,14 @@ namespace ClampedGaussianBlurEffect
         {
             ControlInfo configUI = CreateDefaultConfigUI(props);
 
-            configUI.SetPropertyControlValue(PropertyNames.Amount1, ControlInfoPropertyNames.DisplayName, "Radius");
+            configUI.SetPropertyControlValue(PropertyNames.Radius, ControlInfoPropertyNames.DisplayName, "Radius");
 
             return configUI;
         }
 
         protected override void OnSetRenderInfo(PropertyBasedEffectConfigToken newToken, RenderArgs dstArgs, RenderArgs srcArgs)
         {
-            int Amount1 = newToken.GetProperty<Int32Property>(PropertyNames.Amount1).Value;
+            int radius = newToken.GetProperty<Int32Property>(PropertyNames.Radius).Value;
 
             ColorBgra colorMarker = ColorBgra.FromBgra(46, 106, 84, 0);
 
@@ -105,7 +105,7 @@ namespace ClampedGaussianBlurEffect
             // Setup for calling the Gaussian Blur effect
             PropertyCollection blurProps = blurEffect.CreatePropertyCollection();
             PropertyBasedEffectConfigToken BlurParameters = new PropertyBasedEffectConfigToken(blurProps);
-            BlurParameters.SetPropertyValue(GaussianBlurEffect.PropertyNames.Radius, Amount1);
+            BlurParameters.SetPropertyValue(GaussianBlurEffect.PropertyNames.Radius, radius);
             blurEffect.SetRenderInfo(BlurParameters, dstArgs, new RenderArgs(clampedSurface));
 
             base.OnSetRenderInfo(newToken, dstArgs, srcArgs);
